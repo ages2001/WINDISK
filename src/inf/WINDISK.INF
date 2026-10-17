@@ -1,0 +1,86 @@
+; WINDISK.INF - WINDRV 1.0 WINDISK disk controllers for Windows 95, 98 and ME
+; PCI IDE, SATA AHCI (and Intel / AMD RAID mode as AHCI), NVMe and SD host controllers (PCI
+; and ACPI). WINDISK.VXD drives the controller and enumerates its disks and CD/DVD drives;
+; the I/O Supervisor loads WINDISK.PDR for them (WINDISKD.INF, WINDISKC.INF).
+
+[Version]
+Signature="$CHICAGO$"
+Class=hdc
+Provider=%Provider%
+
+[DestinationDirs]
+DefaultDestDir=11
+WINDISK.CopyPdr=12
+WINDISK.CopyInf=17
+
+[SourceDisksNames]
+1=%DiskName%,,0
+
+[SourceDisksFiles]
+WINDISK.VXD=1
+WINDISK.PDR=1
+WIN4G.VXD=1
+WINDISKD.INF=1
+WINDISKC.INF=1
+
+[Manufacturer]
+%Provider%=WINDRV
+
+[WINDRV]
+%IDE.Desc%=WINDISK.HC,PCI\CC_0101
+%AHCI.Desc%=WINDISK.HC,PCI\CC_010601
+%AHCI.Desc%=WINDISK.HC,PCI\CC_0106
+%RAID.Desc%=WINDISK.HC,PCI\VEN_8086&CC_0104
+%RAID.Desc%=WINDISK.HC,PCI\VEN_1022&CC_0104
+%RAID.Desc%=WINDISK.HC,PCI\VEN_1002&CC_0104
+%NVMe.Desc%=WINDISK.HC,PCI\CC_010802
+%NVMe.Desc%=WINDISK.HC,PCI\CC_0108
+%SD.Desc%=WINDISK.HC,PCI\CC_080501
+%SD.Desc%=WINDISK.HC,PCI\CC_080500
+%SD.Desc%=WINDISK.HC,PCI\CC_0805
+%SDACPI.Desc%=WINDISK.HC,ACPI\80860F14
+%SDACPI.Desc%=WINDISK.HC,ACPI\80860F16
+%SDACPI.Desc%=WINDISK.HC,ACPI\INT33BB
+%SDACPI.Desc%=WINDISK.HC,ACPI\80865ACA
+%SDACPI.Desc%=WINDISK.HC,ACPI\80865AD0
+%SDACPI.Desc%=WINDISK.HC,ACPI\PNP0D40
+%SDACPI.Desc%=WINDISK.HC,*PNP0D40
+
+; ---- controllers: WINDISK.VXD is the DevLoader and the enumerator of the disks ----
+[WINDISK.HC]
+CopyFiles=WINDISK.CopyVxd,WINDISK.CopyPdr,WINDISK.CopyInf
+AddReg=WINDISK.HC.AddReg
+UpdateInis=WINDISK.Inis
+
+[WINDISK.HC.AddReg]
+HKR,,DevLoader,,WINDISK.VXD
+HKR,,Options,,""
+HKR,,DriverDesc,,"%Provider% WINDISK 1.0"
+
+; WIN4G.VXD moves PCI resources above 4G below 4G before the PCI bus is enumerated;
+; WINDISK.VXD loaded at the start takes the controllers of the BIOS drives before the I/O
+; Supervisor looks at them (no MS-DOS compatibility mode for the boot disk)
+[WINDISK.Inis]
+system.ini,386Enh,,"device=win4g.vxd"
+system.ini,386Enh,,"device=windisk.vxd"
+
+[WINDISK.CopyVxd]
+WINDISK.VXD
+WIN4G.VXD
+
+[WINDISK.CopyPdr]
+WINDISK.PDR
+
+[WINDISK.CopyInf]
+WINDISKD.INF
+WINDISKC.INF
+
+[Strings]
+Provider="WINDRV"
+DiskName="WINDRV WINDISK 1.0 disk"
+IDE.Desc="WINDISK PCI IDE Controller (primary/secondary channels)"
+AHCI.Desc="WINDISK SATA AHCI Controller"
+RAID.Desc="WINDISK SATA Controller (RAID mode, as AHCI)"
+NVMe.Desc="WINDISK NVMe (NVM Express) Controller"
+SD.Desc="WINDISK SD Host Controller (SD/SDHC/SDXC)"
+SDACPI.Desc="WINDISK SD Host Controller (SD/eMMC, ACPI)"

@@ -1,0 +1,33 @@
+; WINDISKC.INF - WINDRV 1.0 WINDISK CD/DVD drives for Windows 95, 98 and ME
+; ATAPI CD/DVD drives on IDE and SATA (AHCI) controllers enumerated by WINDISK.VXD: the I/O
+; Supervisor loads the WINDISK.PDR port driver for them.
+
+[Version]
+Signature="$CHICAGO$"
+Class=CDROM
+Provider=%Provider%
+
+[DestinationDirs]
+DefaultDestDir=11
+
+[Manufacturer]
+%Provider%=WINDRV
+
+[WINDRV]
+%IDE.Desc%=WINDISKC.CD,WINDISK\IDE&CDROM
+%AHCI.Desc%=WINDISKC.CD,WINDISK\AHCI&CDROM
+%CD.Desc%=WINDISKC.CD,WINDISK\CDROM
+
+; WINDISK.PDR was installed with the controller (WINDISK.INF): nothing to copy, the install is silent
+[WINDISKC.CD]
+AddReg=WINDISKC.CD.AddReg
+
+[WINDISKC.CD.AddReg]
+HKR,,DevLoader,,*IOS
+HKR,,PortDriver,,WINDISK.PDR
+
+[Strings]
+Provider="WINDRV"
+IDE.Desc="WINDISK IDE CD/DVD Drive"
+AHCI.Desc="WINDISK SATA CD/DVD Drive (AHCI)"
+CD.Desc="WINDISK CD/DVD Drive"

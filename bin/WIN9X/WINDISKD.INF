@@ -1,0 +1,38 @@
+; WINDISKD.INF - WINDRV 1.0 WINDISK disks for Windows 95, 98 and ME
+; IDE, SATA, NVMe and SD disks enumerated by WINDISK.VXD: the I/O Supervisor loads the
+; WINDISK.PDR port driver for them, which gives them 32-bit drive letters. Device Manager
+; shows the model name the disk reports.
+
+[Version]
+Signature="$CHICAGO$"
+Class=DiskDrive
+Provider=%Provider%
+
+[DestinationDirs]
+DefaultDestDir=11
+
+[Manufacturer]
+%Provider%=WINDRV
+
+[WINDRV]
+%IDE.Desc%=WINDISKD.Disk,WINDISK\IDE&DISK
+%AHCI.Desc%=WINDISKD.Disk,WINDISK\AHCI&DISK
+%NVMe.Desc%=WINDISKD.Disk,WINDISK\NVME&DISK
+%SD.Desc%=WINDISKD.Disk,WINDISK\SD&DISK
+%Disk.Desc%=WINDISKD.Disk,WINDISK\DISK
+
+; WINDISK.PDR was installed with the controller (WINDISK.INF): nothing to copy, the install is silent
+[WINDISKD.Disk]
+AddReg=WINDISKD.Disk.AddReg
+
+[WINDISKD.Disk.AddReg]
+HKR,,DevLoader,,*IOS
+HKR,,PortDriver,,WINDISK.PDR
+
+[Strings]
+Provider="WINDRV"
+IDE.Desc="WINDISK IDE Disk"
+AHCI.Desc="WINDISK SATA Disk (AHCI)"
+NVMe.Desc="WINDISK NVMe Disk"
+SD.Desc="WINDISK SD Card"
+Disk.Desc="WINDISK Disk"

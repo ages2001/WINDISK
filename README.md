@@ -1,0 +1,600 @@
+# WINDISK 1.0 — IDE, AHCI, NVMe, CD/DVD, SD card and eMMC driver for DOS, Windows 3.x and Windows 95 / 98 / ME
+
+WINDISK is a driver written from scratch that brings modern disk controllers to MS-DOS 5 / 6,
+Windows 3.0 / 3.1 / Windows for Workgroups 3.11 (as a DOS driver also under Windows 1.0x and
+2.x) and Windows 95 / 98 / ME:
+
+* **IDE (PATA / SATA in IDE mode):** every controller of PCI class 01:01, in **legacy
+  (compatibility)** mode (1F0h / 170h, IRQ 14 / 15) and in **native** mode (PCI BARs), ISA /
+  VLB controllers (1F0h / 170h without PCI; 1E8h / 168h with `/ISA`), bus-master **DMA** and
+  **PIO**, **CHS**, **LBA28** and **LBA48** addressing
+* **SATA AHCI:** no need for the BIOS's IDE compatibility mode; a port the BIOS uses is
+  shared with it ("borrow" mode)
+* **NVMe:** admin and I/O queues, PRP lists, several namespaces
+* **CD/DVD drives** (IDE ATAPI and AHCI ATAPI): a drive letter through MSCDEX and the
+  `WINCD.SYS` device; CD-ROM, CD-R/RW and DVD (4.7 / 8.5 GB) data discs, media change, tray
+  open / close
+* **SD / SDHC / SDXC card readers** (PCI class 08:05, SDHCI 1.0–4.x): ADMA2 or PIO, card
+  insertion and removal, write-protect switch
+* **eMMC** and non-removable (soldered, bootable) **SD / MMC** disks: on PCI SD controllers
+  and on controllers only ACPI describes (Bay Trail, Cherry Trail, Braswell, Apollo Lake,
+  AMD); used as fixed disks (§8b)
+* **Large disks:** 64-bit sector numbers (LBA48, NVMe, GPT), disks larger than 2 TB,
+  512 / 1024 / 2048 / 4096-byte logical sectors (§8c)
+* **Windows 3.1:** 32-bit disk access (FastDisk) for disks WDCTRL cannot drive (§4)
+* **Windows 95 / 98 / ME:** Plug and Play driver `WINDISK.VXD` and I/O Supervisor port
+  driver `WINDISK.PDR`; controllers and disks appear in Device Manager in the right classes
+  with precise names (§4a)
+* Works under DOS, Windows **Standard Mode** and **386 Enhanced Mode** (VxD)
+* FAT12 / FAT16 partitions (MBR, extended partitions, GPT) get DOS drive letters
+
+WINDISK is one of the four WINDRV packages, each in its own repository and usable alone or
+together with the others:
+
+| Package | What it drives |
+|---------|----------------|
+| **WINDISK**  | IDE, SATA AHCI and NVMe disks, IDE/AHCI CD/DVD drives, SD card readers and eMMC |
+| **WINUSB**   | USB host controllers and devices, PS/2 mouse and keyboard, touchpads, USB4 / Thunderbolt |
+| **WINAUDIO** | HD Audio, AC'97 and the Intel audio DSP (SST / SOF), General MIDI synthesizer |
+| **WINUDF**   | the UDF file system (DVD, Blu-ray, packet-written CDs, UDF disks), read and write |
+
+---
+
+## Supported systems
+
+| System | WINDISK |
+|--------|------|
+| MS-DOS 5.0 / 6.x | disks, CD/DVD (MSCDEX), SD / eMMC |
+| Windows 1.0x, Windows 2.x (real mode) | disks (as DOS drives) |
+| Windows/386 2.x | **does not work** (see "Known limitations") |
+| Windows 3.0 Real / Standard / 386 Enhanced Mode | disks, CD/DVD |
+| Windows 3.1, WfW 3.11 | everything + 32-bit disk access (FastDisk) |
+| Windows 95 / 98 / ME | IDE, AHCI, NVMe and SD / eMMC controllers as Plug and Play devices: `WINDISK.VXD` + the IOS port driver `WINDISK.PDR` (32-bit drive letters, CD/DVD through CDFS) (§4a) |
+
+## Repository layout
+
+```
+bin/DOS     DOS: the driver, its 32-bit core, tools, installer and uninstaller (also all
+            Windows 1.0x / 2.x need)
+bin/WIN3X   Windows 3.0, 3.1 and Windows for Workgroups 3.11
+bin/WIN9X   Windows 95, 98 and ME (Plug and Play drivers and their INF files: the folder
+            to give to "Have Disk" / "Update Driver")
+src         the source code (see "Building")
+```
+
+Files used by several systems are in each of their folders. The installer is run from
+`bin\DOS`; it takes the files of the other systems from the folders next to it, so the
+`bin` tree has to stay together (copy all of it to a floppy or a directory).
+
+| Folder | Files |
+|--------|-------|
+| `bin/DOS` | `DSKBENCH.EXE`, `INSTDISK.EXE`, `README.TXT`, `UNINDISK.EXE`, `WINCD.SYS`, `WINDCORE.BIN`, `WINDISK.SYS`, `WININFO.EXE` |
+| `bin/WIN3X` | `WIN30FIX.COM`, `WINDISK.386`, `WINDISK.TXT`, `WINGRP.EXE` |
+| `bin/WIN9X` | `WIN4G.VXD`, `WINDISK.INF`, `WINDISK.PDR`, `WINDISK.TXT`, `WINDISK.VXD`, `WINDISKC.INF`, `WINDISKD.INF`, `WINGRP.EXE` |
+
+## 1. Requirements
+
+* Pentium or later processor (TSC), MS-DOS 5.0 / 6.x, **HIMEM.SYS**, PCI bus
+* Windows 3.0, 3.1 or WfW 3.11 (optional; under Windows 1.0x and real-mode 2.x the disks
+  work as DOS drives, under Windows/386 2.x they do not), or Windows 95 / 98 / ME
+* For CD/DVD drives: **MSCDEX.EXE** of MS-DOS (2.21 or 2.23)
+* **One** of IDE, AHCI, NVMe or SD is enough; each kind is scanned separately and missing
+  ones are skipped. When there is no disk to serve at all, WINDISK.SYS says so and does not
+  stay in memory.
+
+## 2. Files
+
+| File | Folder | Purpose |
+|------|--------|---------|
+| `WINDISK.SYS`  | DOS | DOS block device driver (CONFIG.SYS) |
+| `WINDCORE.BIN` | DOS | 32-bit driver core (DOS / Standard Mode), in the directory of WINDISK.SYS |
+| `WINCD.SYS`    | DOS | DOS CD-ROM device `WINCD001` for the CD/DVD drives (with MSCDEX) |
+| `WININFO.EXE`  | DOS | status, disks, drive letters, partitions and file systems, event log |
+| `DSKBENCH.EXE` | DOS | sequential read benchmark |
+| `INSTDISK.EXE` | DOS | installer |
+| `UNINDISK.EXE` | DOS | uninstaller |
+| `README.TXT`   | DOS | this text (code page 437) |
+| `WINDISK.386`  | WIN3X | Windows 386 Enhanced Mode VxD, in the directory of WINDISK.SYS (loaded automatically) |
+| `WIN30FIX.COM` | WIN3X | XMS fix for Windows 3.0 Standard Mode with more than 16 MB of memory |
+| `WINGRP.EXE`   | WIN3X, WIN9X | creates the Program Manager / Start menu group at the next start of Windows |
+| `WINDISK.TXT`  | WIN3X, WIN9X | this text for Notepad ("Read Me" item of the group) |
+| `WINDISK.VXD`  | WIN9X | Windows 95/98/ME Plug and Play VxD (DevLoader of the controllers, enumerator of the disks) |
+| `WINDISK.PDR`  | WIN9X | Windows 95/98/ME I/O Supervisor port driver (`SYSTEM\IOSUBSYS`) |
+| `WINDISK.INF`  | WIN9X | IDE, AHCI, RAID (as AHCI), NVMe and SD controllers (Hard disk controllers) |
+| `WINDISKD.INF` | WIN9X | disks (Disk drives, `*IOS` + WINDISK.PDR) |
+| `WINDISKC.INF` | WIN9X | CD/DVD drives (CDROM) |
+| `WIN4G.VXD`    | WIN9X | moves PCI resources above 4 GB below 4 GB at boot (see "PCI resources above 4 GB") |
+
+## 3. Installation
+
+Run the installer from DOS (not from a DOS box of Windows 3.x), from `bin\DOS` of this
+package. The default target is the Windows directory (found from WIN.COM on the PATH, or
+given with `/W:`; `C:\WINDOWS` otherwise):
+
+```
+INSTDISK                     installs into the Windows directory (e.g. C:\WINDOWS)
+INSTDISK D:\DRV\WIN          installs into another directory
+INSTDISK /O /PIO /ISA        with driver options (everything after /O goes to WINDISK.SYS)
+INSTDISK /NO32               does not add the 32-bit disk access settings to SYSTEM.INI
+INSTDISK /DOS                MS-DOS 7 (Windows 95/98): adds WINDISK.SYS to CONFIG.SYS too
+```
+
+INSTDISK finds every Windows installation of the machine (`/W:dir` selects one). It copies
+the files and adds `DEVICE=C:\WINDOWS\WINDISK.SYS` to CONFIG.SYS after the HIMEM.SYS /
+EMM386 lines and before WINUSB.SYS if present; a multi-configuration (menu) CONFIG.SYS gets
+the line in every block that loads HIMEM. Running it again is safe: the old line is
+replaced, and its options are kept unless `/O` is given. The original of every file it
+changes is saved once as `CONFIG.WND`, `SYSTEM.WND` ... It refuses to run inside Windows.
+It adds `device=*int13` and `32BitDiskAccess=on` to the `[386Enh]` section of SYSTEM.INI
+(see §4); `/NO32` skips that.
+
+For CD/DVD drives INSTDISK also
+
+* adds `DEVICE=...\WINCD.SYS` after every `WINDISK.SYS` line of CONFIG.SYS, and
+  `LASTDRIVE=Z` when there is no LASTDRIVE line (so that MSCDEX finds a free letter),
+* adds `/D:WINCD001` to the MSCDEX line of AUTOEXEC.BAT; without one it looks for MSCDEX.EXE
+  (DOS directory, PATH) and writes `MSCDEX.EXE /D:WINCD001` before the SMARTDRV / WIN line.
+
+Windows 3.0 and 3.1 get a **WINDISK** group in Program Manager (Disk Info, Disk Benchmark,
+Read Me), Windows 95 / 98 / ME the same group in the Start menu: Windows 3.0's group file is
+written directly, otherwise WINGRP.EXE creates the group through DDE at the next start of
+Windows. Installing again does not duplicate lines or group items.
+
+Uninstall: `C:\WINDOWS\UNINDISK` removes the CONFIG.SYS lines, restores SYSTEM.INI, removes
+the group, the files and (unless it is the Windows directory) the emptied directory (`/K`
+keeps the files). WININFO / DSKBENCH stay when WINUSB is installed in the same directory.
+The driver stays in memory until the next restart.
+
+Manual installation:
+
+```
+DEVICE=C:\DOS\HIMEM.SYS
+DEVICE=C:\WINDOWS\WINDISK.SYS
+DEVICE=C:\WINDOWS\WINCD.SYS          (with CD/DVD drives)
+LASTDRIVE=Z
+```
+
+AUTOEXEC.BAT:
+
+```
+C:\DOS\MSCDEX.EXE /D:WINCD001
+```
+
+SYSTEM.INI needs no line for the VxD: it is loaded through INT 2Fh / 1605h when Windows
+starts. EMM386 works too (VCPI); WINDISK.SYS after EMM386 is the tested order.
+
+### Options
+
+| Option | Meaning |
+|--------|---------|
+| `/NOIDE`  | do not use IDE controllers |
+| `/PIO`    | no bus-master DMA on IDE (PIO only) |
+| `/ISA`    | also scan the ISA IDE channels 3 and 4 (1E8h / 3EEh, 168h / 36Eh) |
+| `/NOAHCI` | do not use AHCI controllers |
+| `/NONVME` | do not use NVMe controllers |
+| `/NVME`   | also take over the NVMe controller the BIOS uses (boot disk), shared with the BIOS |
+| `/ALL`    | also mount the partitions DOS does not use on disks the BIOS already serves |
+| `/NOVXD`  | do not load the VxD in Enhanced Mode |
+| `/V`, `/D`| verbose / debug log (port E9h) |
+| `/COM1`   | the log goes to COM1 too |
+| `/S`      | the driver log goes to the screen too (diagnosis on machines without a serial port) |
+| `/NORELOC`| do not move PCI resources from above 4 GB at boot |
+| `/ALL4G`  | move every device below 4 GB at boot, not only the WINDRV devices |
+
+### When there is no drive letter
+
+WINDISK gives letters only to FAT12 / FAT16 partitions DOS does **not** already see through
+the BIOS. On a single-disk machine (boot disk C:) there may be nothing to mount. WINDISK then
+tells what it found and why each disk got no letter, and stays in memory **as a character
+device** without letters:
+
+```
+WINDISK: controllers: 0 PCI IDE, 1 AHCI, 1 NVMe; 2 disk(s)
+  AHCI Netac SSD 128GB, 122104 MB (BIOS disk):
+    its FAT partitions are already DOS drives through the BIOS
+WINDISK: no drive letters; resident for Windows
+```
+
+So WINDISK.386 is still loaded in Windows and provides the 32-bit disk access and the AHCI
+BIOS fix below. When no disk is found at all, the driver does not stay in memory.
+
+## 4. Windows 3.1: 32-bit disk access (FastDisk)
+
+WDCTRL, the 32-bit disk driver of Windows 3.1, supports only the old WD1003 / IDE interface
+at 1F0h and at most 1024 cylinders (about 504 MB). With AHCI, NVMe or large disks,
+32BitDiskAccess=ON gives "WDCTRL ... incompatible with this computer's hard-disk controller",
+so Windows Setup does not turn it on.
+
+WINDISK.386 is a **FastDisk (BlockDev) driver** that replaces it: it serves the BIOS disks
+80h and 81h (C:, D: ...) with its own AHCI / NVMe / IDE code. Windows then never calls the
+BIOS for them: the disk I/O of DOS boxes and the swap file run in protected mode. Needed
+(INSTDISK does it):
+
+```
+[386Enh]
+device=*int13
+32BitDiskAccess=on
+```
+
+* A `device=*wdctrl` line is disabled by INSTDISK (`;WINDISK:device=*wdctrl`) and restored
+  by UNINDISK. `INSTDISK /NO32` leaves SYSTEM.INI alone.
+* A BIOS drive is matched to a WINDISK disk by its MBR and BIOS geometry. When the match is
+  not unique (e.g. cloned disks with the same MBR) the drive stays with the BIOS.
+* Windows' INT13 device supports only 80h and 81h; other BIOS disks stay with the BIOS.
+* The "32-bit disk access" box of Control Panel → 386 Enhanced → Virtual Memory is for WDCTRL
+  only; WINDISK looks at the `32BitDiskAccess` value of SYSTEM.INI.
+
+## 4a. Windows 95 / 98 / ME
+
+On Windows 9x WINDISK is a **Plug and Play** driver; CONFIG.SYS needs no line.
+
+1. Run `INSTDISK` from `bin\DOS` (in DOS or in a DOS box): `WINDISK.VXD` and `WIN4G.VXD` go
+   to `WINDOWS\SYSTEM`, `WINDISK.PDR` to `SYSTEM\IOSUBSYS`, the INF files to `WINDOWS\INF`
+   (without their `CopyFiles` lines: the files are in place already, Windows would ask for
+   a disk for each), and `device=win4g.vxd` and `device=windisk.vxd` are added to the
+   `[386Enh]` section of SYSTEM.INI. On MS-DOS 7 (the DOS of Windows 95/98) WINDISK.SYS is
+   **not** added to CONFIG.SYS; `WINDISK.VXD` drives Windows' disks from the start.
+   (On Windows 9x INSTDISK does not touch the `*int13` / 32BitDiskAccess settings.)
+2. In **Device Manager** select the controller: on Windows 95 Remove + Refresh ("New
+   Hardware Found", Windows default driver), on Windows 98 / ME Properties, Driver, Update
+   Driver, Have Disk, `C:\WINDOWS\INF`. For a controller Windows has not seen before (e.g.
+   AHCI or NVMe) WINDISK is offered at boot by itself. `bin\WIN9X` of this package can also
+   be given directly as the driver disk; its INF files copy all files themselves.
+
+The controllers appear under "Hard disk controllers" with names that tell the chipset and
+the mode: "WINDISK Intel 7 Series PCI IDE Controller (primary/secondary channels, bus
+master)", "WINDISK Intel ICH9 SATA AHCI Controller", "WINDISK Intel … SATA Controller (RAID
+mode, as AHCI)", "WINDISK Samsung NVMe (NVM Express) Controller", "WINDISK O2 Micro SD Host
+Controller (SD/SDHC/SDXC)", "WINDISK SD Host Controller (SD/eMMC, ACPI)". Windows 95 matches
+only the 4-digit PCI class code, so the driver writes the precise name when it starts the
+controller. Every disk and CD/DVD drive becomes a child device of its controller
+(`WINDISK\AHCI&DISK\…`, `WINDISK\NVME&DISK`, `WINDISK\IDE&CDROM`, `WINDISK\SD&DISK`,
+`WINDISK\MMC&DISK` …) in the "Disk drives" and "CDROM" classes; the I/O Supervisor loads
+`WINDISK.PDR` for them and Windows' 32-bit file system gives the letters. SCSIPORT and
+miniports are not used.
+
+* **BIOS disks and the boot disk:** with `device=windisk.vxd` WINDISK.VXD loads early, before
+  the I/O Supervisor, and starts the controllers that may carry BIOS disks (AHCI, RAID
+  working as AHCI, NVMe, PCI and ACPI SD / eMMC) at once. It finds which BIOS INT 13h drive
+  is which disk from the size and the BPBs of the DOS drives, and from then on does the INT
+  13h transfers of those drives itself. When the I/O Supervisor checks the real-mode drives
+  it finds the disks at WINDISK.PDR and moves their letters (C: included) to the 32-bit
+  path: **no disk is left in "MS-DOS compatibility mode"**, System Properties / Performance
+  says "optimal". Windows 95 booted and shut down from AHCI, NVMe and eMMC disks (QEMU). IDE
+  channels run in 32 bits with Windows' own IDE driver or with WINDISK.
+  * NVMe: the controller the BIOS runs is **shared**: the BIOS's admin queue is kept and
+    WINDISK adds its own I/O queue pair next to the BIOS's. The pair is deleted when Windows
+    shuts down, so the BIOS reaches the disk again ("Restart in MS-DOS mode", shutdown
+    screen).
+  * SD / eMMC: a card the BIOS set up is borrowed from the BIOS; eMMCs of 2 GB and less use
+    byte addressing, larger ones sector addressing.
+  * At shutdown the devnodes of disks that are BIOS drives are not removed: the swap file
+    and open files stay in place ("The volume that was removed had open files" does not
+    appear). The controllers stop at Sys_Critical_Exit, after the caches were written.
+  * When WINDISK is installed while Windows runs (Device Manager), a boot disk that is open
+    in compatibility mode moves to the 32-bit path **at the next boot**; a disk in use is
+    not taken away from the running Windows.
+* **CD/DVD drives:** every CD/DVD drive gets a SCSI bus DCB from WINDISK.PDR; the
+  I/O Supervisor's SCSI'izer turns CDFS requests into SRBs and the driver executes the
+  commands. CDs are read by the 32-bit CDFS (no MSCDEX), disc change, Eject and the audio
+  commands the drive supports work. Tried on Windows 95 and 98.
+* **/DOS:** `INSTDISK /DOS` writes `HIMEM.SYS` and `WINDISK.SYS` to CONFIG.SYS on MS-DOS 7 too
+  (for "Command prompt only" / MS-DOS mode). Windows then loads the WINDISK.386 that
+  WINDISK.SYS brings, `device=windisk.vxd` is removed, and the DOS drives of WINDISK.SYS run
+  in compatibility mode in Windows. Do not use `/DOS` when you want 32-bit access.
+* Options: the `Options` value in the software key of the controller devnode (Regedit) or
+  `Options=` in the `[WINDISK]` section of SYSTEM.INI (read only at boot), e.g. `/D` (log).
+* Verified (QEMU): Windows 95 RTM — AHCI controller from the INF on a clean installation,
+  AHCI / NVMe / eMMC boot disk, ATAPI CD/DVD (WINDISK.PDR); Windows 98 — IDE boot disk and an
+  AHCI data disk with WINDISK.PDR, AHCI CD/DVD, "Restart in MS-DOS mode".
+* Stability: two faults that could close Explorer or MSGSRV32 on Windows 95 were found and
+  fixed: the reference data of the port driver's DDB pointed to the wrong object (Windows
+  95's IOS read it when loading the driver and stopped with **fatal exception 0E** in VMM),
+  and installing a device while Windows runs called the SYSTEM.INI service VMM offers only
+  at boot ("attempted to use a system service which is not loaded"); SYSTEM.INI is read only
+  at boot now.
+
+## 5. Windows: the Intel AHCI BIOS bug (no AHCIFIX.386 needed)
+
+The Intel AHCI option ROM (and similar ones) makes two mistakes with VDS (INT 4Bh): when it
+unlocks a DMA region it passes the descriptor in DS:DI instead of ES:DI (Windows' VDMAD reads
+random memory and crashes), and it uses the start of the EBDA as a DMA area, destroying the
+mouse data stored there. PluMGMK's AHCIFIX.386 / AHCIFIXD.SYS projects describe this in
+detail.
+
+WINDISK carries the same fix:
+
+* **Windows Enhanced Mode:** WINDISK.386 hooks the V86 INT 4Bh chain at Sys_Critical_Init.
+  For the faulty UNLOCK call coming from ROM code (segment C000h and up) it fixes ES / DS and
+  restores them on return. When the start of the EBDA is locked its contents are saved and
+  written back when it is unlocked.
+* **DOS + EMM386:** WINDISK.SYS passes INT 4Bh through the same fix while a BIOS disk call is
+  in progress.
+
+With FastDisk Windows does not call the BIOS for 80h / 81h at all; the fix covers the start
+of Windows and the other disks. With WINDISK installed a `device=...AHCIFIX.386` line is not
+needed; both loaded together do no harm.
+
+## 6. Real hardware notes (Intel / AMD / others)
+
+* **AHCI shared with the BIOS:** the AHCI INT 13h code of UEFI-CSM BIOSes (Intel 6 series
+  and later, most AMD FCH / Zen boards) stops the port after every command. WINDISK treats
+  every port whose command list / FIS addresses are programmed as a BIOS port: before its
+  own command it saves the BIOS's addresses and restores them afterwards. Controller
+  ownership (BOHC) is not requested from the BIOS and the global interrupt enable (GHC.IE)
+  is not changed, so BIOS disk code that uses interrupts keeps working.
+* **RAID mode:** Intel RST and AMD RAID controllers (PCI class 01:04) with AHCI registers
+  serve single disks as AHCI. RAID volumes are not supported.
+* **IDE:** Intel ICH / PCH IDE mode (legacy 8Ah or native 8Fh / 85h; on the 6 / 7 series ports
+  4-5 separately, the second function in native mode), AMD SB6xx–FCH SATA "IDE" mode
+  (native) and PATA controller (legacy), VIA / SiS / ALi / JMicron PCI IDE functions. On the
+  channels the driver owns the interrupt is turned off (nIEN) and it polls.
+* **NVMe:** in DOS the NVMe controller the BIOS already runs (boot disk) is not touched
+  unless `/NVME` is given; then it is shared with the BIOS (the BIOS's queues stay, WINDISK
+  adds its own I/O queue). On Windows 95 / 98 / ME the BIOS's NVMe controller is always
+  shared this way (§4a).
+* Devices whose registers were placed above 4 GB ("Above 4G decoding") are moved below 4 GB
+  at boot (`/NORELOC`).
+
+## 7. IDE details
+
+* The programming interface byte is read: bits 0 / 2 say the primary / secondary channel
+  runs in **native** mode. A native channel takes its addresses from BAR0–BAR3, a legacy
+  channel uses 1F0h / 3F6h and 170h / 376h; the bus-master address is BAR4. The mode is
+  not changed.
+* Every channel gets a register test and **IDENTIFY DEVICE** for master and slave. ATAPI
+  devices (CD/DVD) are recognized with **IDENTIFY PACKET DEVICE** and handed to the CD/DVD
+  layer (§8a). A CD/DVD drive on a channel the BIOS keeps is used too; only the ATAPI
+  device of that channel is touched, the channel is not reset.
+* **DMA** is used when the controller supports bus mastering and a DMA / UDMA mode is enabled
+  on the device (by the BIOS or the firmware); timing registers are chipset specific, so
+  WINDISK does not program modes. After a DMA error the channel is reset and the device
+  falls back to PIO. The PRD table never crosses a 64 KB boundary.
+* On the channels the driver uses the device interrupt is turned off (nIEN) and it polls;
+  IRQ 14 / 15 stay with the BIOS and Windows.
+* **Sharing with the BIOS:** the channel of a disk one of whose partitions DOS uses through
+  INT 13h, and the primary legacy channel carrying a BIOS disk (boot disk; WDCTRL / 32-bit
+  disk access in Windows), are **left to the BIOS**; no device of that channel is touched.
+  Channels of BIOS disks DOS does not use at all (e.g. a second disk with a FAT16-LBA
+  partition DOS 6.22 does not know) are taken over by WINDISK.
+
+## 8. Drive letters
+
+Fixed disks get letters at boot, in order (`WINDISK: drives D: E: F:`). Partitions DOS has
+already mounted through INT 13h (matched by the MBR CRC and DOS's BDS list) are skipped so
+they are not mounted twice. After returning from Windows the units are matched again by
+disk identity.
+
+## 8a. CD/DVD drives
+
+* Drives on IDE (PIO PACKET) and AHCI (ATAPI, DMA) are used with SCSI MMC commands: TEST UNIT
+  READY, REQUEST SENSE, READ CAPACITY, READ(10), READ CD (raw 2352-byte sectors), START STOP
+  UNIT (tray), PREVENT ALLOW (lock), READ TOC.
+* `WINCD.SYS` offers the DOS CD-ROM device driver interface MSCDEX expects (READ LONG cooked
+  / raw, HSG / Red Book addressing; IOCTL input: header address, head location, device
+  status, sector size, volume size, media changed, disc / track info; IOCTL output: tray
+  open / close, lock, reset). Requests go to the WINDISK core through INT 2Fh; it works the
+  same in DOS, Standard Mode and 386 Enhanced Mode.
+* A disc change is reported to MSCDEX as "media changed"; on DVDs sectors beyond 4 GB are
+  read too (a single ISO 9660 file can be 4 GB at most).
+* WININFO and USBTREE show the CD/DVD drives and the size of the disc.
+
+## 8b. SD card readers and eMMC
+
+* Every SD Host Controller of PCI class 08:05 (programming interface 0–2: Intel, O2Micro,
+  Ricoh, JMicron, TI, Toshiba, AMD …) is scanned with all its slots. SD / eMMC controllers
+  that only ACPI describes are used too (Intel Bay Trail / Cherry Trail / Braswell
+  `80860F14`, `80860F16`, `INT33BB`, Apollo Lake `80865ACA` / `80865AD0`, generic SDHCI
+  `PNP0D40`, AMD): ACPI is read only to find and fully use them (memory window, `_RMV`,
+  power). On Windows 95 / 98 / ME the Configuration Manager hands these controllers over.
+* Card start: CMD0, CMD8, ACMD41 (SDHC / SDXC), CMD2/3/9/7, 4-bit bus (ACMD6), 25 MHz.
+  **MMC / eMMC**: CMD1, EXT_CSD (sector count), 4 / 8-bit bus, high speed. Transfers use
+  ADMA2 when the controller has it, PIO otherwise; multi-block transfers with auto CMD12.
+* **Removable slots:** cards are removable disks with **slot letters** (insertion and
+  removal are noticed when DOS checks the media). With the write-protect switch on, writes
+  are refused.
+* **Non-removable slots and eMMC:** embedded slot type, eMMC controllers, slots ACPI calls
+  non-removable (`_RMV = 0`) and soldered eMMCs are **fixed disks**: their partitions get
+  letters like a hard disk, and they can be booted from.
+* **A card the BIOS uses ("borrow" mode):** a card / eMMC the BIOS started and serves as an
+  INT 13h disk is not reset; the BIOS's bus width and clock are used, the registers the
+  BIOS set are saved before every command and restored afterwards. Partitions DOS already
+  mounted are not mounted again. In Windows 3.x 386 Enhanced Mode `WINDISK.386` does the INT
+  13h transfers of such a drive itself (the SD code of some BIOSes does not work in V86
+  mode). On Windows 95 / 98 / ME such a disk is borrowed as described in §4a.
+* SDIO cards (Wi-Fi) and UHS speeds are not used. USB card readers keep working as USB
+  storage under WINUSB.
+
+## 8c. Large disks and sector sizes
+
+* All disk drivers use 64-bit sector numbers: IDE LBA48, AHCI, NVMe (upper half of SLBA),
+  SD / eMMC, USB (WINUSB: READ(16) / WRITE(16)). Disks above 2 TB (2^32 × 512 bytes) show
+  their full size; GPT partitions may lie anywhere on the disk. The 32-bit disk access of
+  Windows 3.x, the BIOS disk service of WINDISK.386 and the Windows 95/98/ME port drivers use
+  64-bit addresses too.
+* Disks with 1024, 2048 or 4096-byte logical sectors (4Kn disks, some USB sticks, IDE disks
+  that report a "logical sector" size) are presented to DOS and Windows with 512-byte
+  sectors; partial sector writes are done as read-modify-write.
+* The file systems of DOS and Windows 9x are limited to MBR partitions within the first
+  2 TB; GPT partitions get DOS letters, but Windows 9x's own partition code does not read GPT.
+
+## 9. Tools
+
+```
+WININFO            status, disks, letters (WINUSB's too when it is loaded)
+WININFO /U         drive letters only
+WININFO /P         partitions (MBR, extended, GPT) and file systems of all disks:
+                   FAT12/16/32, exFAT, NTFS (version and label), ReFS, HPFS, ext2/3/4, XFS,
+                   Btrfs, HFS+, APFS, ISO 9660, Linux swap, BitLocker, LUKS
+WININFO /L         WINDISK event log
+DSKBENCH D: /M:32        read 32 MB from drive D: (INT 25h)
+DSKBENCH /R:1 /M:64 /N   raw read from WINDISK disk 1, device speed only
+```
+
+## PCI resources above 4 GB
+
+With "Above 4G Decoding" enabled in the BIOS setup, the firmware may place the registers of
+some devices (64-bit BARs) and bridge windows above 4 GB, where 32-bit DOS and Windows
+cannot reach them. At boot, before Windows and its drivers look at the machine, the DOS
+driver (WINDISK.SYS; whichever WINDRV DOS driver loads first does it for all) moves those
+resources of **the devices WINDRV drives** into free PCI space below 4 GB: USB controllers
+(UHCI / OHCI / EHCI / xHCI / USB4), audio (HD Audio, AC'97, Intel audio DSP), disk
+controllers (IDE, SATA, RAID, NVMe), SD controllers, Intel LPSS I2C and Thunderbolt NHI.
+When such a device sits behind a bridge with a prefetchable window above 4 GB, the whole
+tree below that bridge (nested bridges and the BARs behind them, largest first) is placed
+again. **Graphics cards and all other devices stay where the firmware put them** (the log
+says `pci 01:00.0 BAR above 4G left in place (not a WINDRV device; /ALL4G moves it)`), so
+"Above 4G" only affects the drivers' own devices. `/ALL4G` moves every device and bridge
+window (a large BAR that does not fit is shrunk with Resizable BAR), `/NORELOC` turns the
+pass off (a device's BAR is then moved alone when its driver starts it). The free space is
+computed from TOLUD..PCIEXBAR on Intel Core chipsets, TOP_MEM..FEC00000 on AMD, and every
+BAR, window and ACPI MCFG range in the system. Each move is logged as
+`pci 00:14.0 BAR 4000000000 -> 9f000000 (64K)`.
+
+On Windows 95 / 98 / ME the same is done by **WIN4G.VXD**: the INF files (and the installer)
+copy it to `SYSTEM\` and add `device=win4g.vxd` to the `[386Enh]` section of SYSTEM.INI.
+This small static VxD does the move at every boot, before the Plug and Play PCI enumeration
+and before all device drivers (Sys_Critical_Init), so the devices come below 4 GB on
+Windows ME too, which has no CONFIG.SYS driver. One restart is needed after the first
+installation. `All4G=1` in the `[WIN4G]` section of SYSTEM.INI moves all devices (like
+`/ALL4G`); `Debug=1` (port E9h) or `Debug=COM1` log what it does.
+
+## Architecture
+
+```
+            DOS / Real / Standard Mode                386 Enhanced Mode
+   +-----------------------------------+   +-----------------------------------+
+   | DOS, programs, Windows (real /    |   | Windows VMs (system VM + DOS)     |
+   | standard mode, DOSX)              |   |                                   |
+   +-----------------+-----------------+   +-----------------+-----------------+
+                     | block / character device requests, INT 2Fh API
+   +-----------------v-----------------+   +-----------------v-----------------+
+   | WINDISK.SYS    (16-bit DOS driver)   |-->| WINDISK.386    (VxD, ring 0)          |
+   |  - drive letters, INT 2Fh API     |   |  - the same 32-bit core code      |
+   |  - 8042 injection (kbd / mouse)   |   |  - VPICD, VKD, WINMOUSE, VMM      |
+   +-----------------+-----------------+   +-----------------------------------+
+                     | switch to protected mode (directly in real mode, VCPI under EMM386)
+   +-----------------v-----------------+
+   | WINDCORE.BIN   (32-bit core in an   |
+   | XMS block, with paging)           |
+   +-----------------------------------+
+```
+
+* The DOS driver is loaded by CONFIG.SYS, puts the 32-bit core into XMS memory and switches
+  the processor to protected mode for a moment on every request.
+* The VxD is loaded **automatically** when Windows 386 Enhanced Mode starts (INT 2Fh /
+  1605h); SYSTEM.INI needs no line. The DOS core lets go of the hardware, the VxD (compiled
+  from the same sources) takes it over, and the DOS core takes it back when Windows exits.
+* In DOS, Real and Standard Mode the core is polled from the timer (INT 08h) and DOS idle
+  (INT 28h) interrupts, only at safe moments (DOS not inside a function, no BIOS disk call
+  in progress). In Enhanced Mode the VxD runs every 10 ms.
+* Windows 95 / 98 / ME use the Plug and Play VxD built from the same core instead.
+* An exception in the core writes `WINDISK CORE EXCEPTION ...` on a red background in the
+  first screen line and stops; a photo of that line is enough to locate the fault.
+* API: INT 2Fh, AH=D3h (see `src/inc/winapi.h`).
+
+## Building
+
+Needed: **Open Watcom v2** (wcc, wcc386, wrc, wlink), **NASM** and **Python 3**.
+
+```sh
+export WATCOM=/opt/watcom          # the Open Watcom installation
+cd src
+./build.sh                         # objects in ../obj, the files sorted into ../bin/DOS,
+                                   # ../bin/WIN3X and ../bin/WIN9X (src/bin-layout.txt)
+```
+
+`src/buildtools` holds the build helpers: `fixvxd.py` (turns the LE file of wlink into the
+form the Windows 3.1 VMM expects), `oslayout.py` (sorts the output by system), `genserv.py`
+(VxD service numbers from the DDK INC files; `src/inc/vxdsvc.inc` comes ready made),
+`genicons.py` (program icons) and `mkdisk.py` (disk images for tests).
+
+Source files and documents are stored with CRLF line ends; `.gitattributes` keeps them so.
+
+### Source tree
+
+| Directory | Contents |
+|-----------|----------|
+| `src/core` | the 32-bit core (all systems): PCI, ACPI, block layer, IDE, AHCI, NVMe, CD/DVD, SD / eMMC (`sdhci.c`) |
+| `src/inc` | shared headers (`winapi.h`: API and control block), VxD service numbers |
+| `src/dos` | DOS: WINDISK.SYS (NASM), the DOS platform layer of the core, WINCD.SYS, WIN30FIX.COM |
+| `src/vxd` | Windows 3.x Enhanced Mode and Windows 95/98/ME: the VxD platform layer and entries, Plug and Play (Configuration Manager), WIN4G.VXD |
+| `src/pdr` | Windows 95/98/ME: the I/O Supervisor port driver WINDISK.PDR |
+| `src/inf` | Windows 95/98/ME: the INF files |
+| `src/win` | Windows (16-bit): WINGRP.EXE, icons |
+| `src/tools` | DOS programs: installer / uninstaller (`winsetup.c`), WININFO, DSKBENCH |
+| `src/buildtools` | build helpers (Python) |
+
+## Tests
+
+QEMU + SeaBIOS (with your own DOS 6.22 / Windows disk images) was used to verify: legacy IDE
+(DMA and PIO), the ISA IDE channel, skipping the BIOS's channel, AHCI, NVMe; INSTDISK /
+UNINDISK (installation into nested directories, the 32-bit disk access settings of
+SYSTEM.INI and their removal, reinstallation, refusal inside Windows, the original files
+back after uninstalling); copying and comparing files in DOS, under EMM386 (VCPI), in
+Windows Enhanced Mode (writes from a DOS box) and after returning from Windows to DOS; two
+Windows sessions in a row; Windows 3.1 Enhanced Mode with FastDisk from an AHCI boot disk
+(QEMU's BIOS cannot boot Windows from that disk alone) with 129 files written to C: and
+compared byte by byte; CD-ROM and a 4.88 GB DVD on IDE and AHCI (MD5 comparison of the files
+with MSCDEX in DOS, Windows 3.0 Standard / Enhanced and 3.1 Enhanced Mode, a file beyond 4 GB
+included), media change, a CD on the BIOS's channel; SD cards (ADMA2 and PIO, SDHC 4 GB, DOS
+and Windows 3.1 Enhanced Mode), no double mount of the BIOS's INT 13h card; the Windows 95 /
+98 cases of §4a.
+
+## Known limitations
+
+* **Real hardware:** the drivers were verified in QEMU and by code review. The fixes for
+  particular Intel / AMD hardware were written from the Linux drivers and the datasheets.
+* **Windows/386 2.x** switches the processor to V86 mode without offering VCPI; while it runs
+  the 32-bit core cannot be entered and the driver serves no requests. The real-mode
+  Windows 2.x (`WIN86.COM` / `WIN.COM`) works.
+* **DOS file systems:** DOS 5 / 6 read only FAT12 / FAT16 (2 GB per partition at most);
+  FAT32, NTFS, exFAT ... partitions get no drive letter.
+* **SeaBIOS (QEMU only):** when SeaBIOS uses a USB keyboard or mouse at boot, its USB polling
+  in SMM can stop the machine while Windows 2.x starts, and DOS boxes of Windows 95/98/ME
+  close. Real BIOSes hand the controllers over properly (BIOS / OS semaphore, SMIs off).
+* WfW 3.11 was not tried on real hardware.
+* The native-mode IDE code could not be tested in QEMU (no native-mode PCI IDE device in that
+  QEMU); CHS-only (pre-LBA) disks are supported at code level only.
+* WINDISK does not set the IDE DMA mode (the BIOS's setting is used); without one, PIO is
+  used.
+* Booting from NVMe and AHCI disks depends on the BIOS.
+* In DOS the disk the BIOS uses (C:) stays with the BIOS; in Windows it runs through WINDISK
+  with FastDisk (§4).
+* QEMU runs SeaBIOS; the UEFI-CSM behaviour (a BIOS that stops the port) could not be
+  reproduced in tests.
+* **CD/DVD:** in DOS (MSCDEX) only ISO 9660 data discs (UDF discs: WINUDF); audio CD playback
+  (PLAY AUDIO) is not supported in DOS. On Windows 95/98/ME CDFS and the audio commands go to
+  the drive directly. USB CD/DVD drives are WINUSB's. Blu-ray was not tried.
+* **SD / eMMC:** not tried on real card readers (tested with QEMU's `sdhci-pci`, `sd-card`
+  and `emmc` devices; QEMU 9.2 for eMMC). Realtek's PCIe card readers (RTS5xxx, own register
+  interface) and Realtek USB readers with a vendor protocol are not supported; standard USB
+  readers work as USB storage under WINUSB.
+* **Windows 95 / 98 / ME:** Intel / AMD controllers in RAID mode work only as far as they are
+  AHCI compatible (single disks, no RAID volumes). Installed with `/DOS`, the DOS drives of
+  WINDISK.SYS stay in compatibility mode (§4a).
+* QEMU's SeaBIOS cannot run the INT 13h code of AHCI, NVMe, SD and USB disks in V86 mode; in
+  QEMU Windows 95 booted from such a disk stops with "An I/O subsystem driver failed to load"
+  without `device=windisk.vxd` (`device=winusb.vxd` for USB). Real BIOSes are not expected to
+  have this limitation; with WINDISK loaded the boot continues on the 32-bit path either way.
+* **Disks above 2 TB:** the drivers use 64-bit sector numbers, but the file systems of DOS and
+  Windows 3.x / 9x (FAT16, FAT32 on Windows 9x) can use only MBR partitions within the first
+  2 TB.
+
+## Version history
+
+**1.0 (5 October 2026)** — first release.
+
+**1.0 update (14 October 2026):**
+
+* Windows 95 / 98 / ME Plug and Play driver (`WINDISK.VXD`, `WINDISK.PDR`; IDE, AHCI, NVMe,
+  SD / eMMC, CD/DVD), a separate INF and class for every device kind, precise device names.
+* eMMC and non-removable SD / MMC disks (PCI and ACPI SD controllers, "borrow" mode for a
+  card the BIOS uses) on all systems.
+* Disks larger than 2 TB and 1024 / 2048 / 4096-byte sectors.
+* PCI resources above 4 GB: the boot-time move applies only to WINDRV's devices (`/ALL4G`
+  for all), WIN4G.VXD on Windows 9x.
+* Windows 95 stability fixes: the DDB reference of the port driver (fatal exception 0E,
+  Explorer / MSGSRV32 closing), the SYSTEM.INI service when installing while Windows runs.
+* Installer: Start menu groups on Windows 95/98/ME, "Read Me" items, no duplicate entries
+  when installing again; the package is split into `bin/DOS`, `bin/WIN3X` and `bin/WIN9X`.
