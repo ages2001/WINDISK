@@ -1,4 +1,4 @@
-# WINDISK 1.0 — IDE, AHCI, NVMe, CD/DVD, SD card and eMMC driver for DOS, Windows 3.x and Windows 95 / 98 / ME
+# WINDISK 1.0 — IDE, AHCI, NVMe, CD/DVD, SD card and eMMC driver for DOS, Windows 1.0x/2.xx/3.xx and Windows 95/98/ME
 
 WINDISK is a driver written from scratch that brings modern disk controllers to MS-DOS 5 / 6,
 Windows 3.0 / 3.1 / Windows for Workgroups 3.11 (as a DOS driver also under Windows 1.0x and
