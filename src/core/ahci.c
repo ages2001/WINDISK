@@ -257,7 +257,7 @@ static int ahci_ready(struct blkdev *d)
 
 static struct blkops ahci_ops = { ahci_rw, ahci_flush, ahci_ready };
 
-/* ATAPI PACKET command with DMA data in; 0 ok, 1 check condition, -1 error */
+/* ATAPI PACKET command with DMA data in (out with CDP_OUT); 0 ok, 1 check condition, -1 error */
 static int ahci_packet(void *priv, const u8 *cdb, void *buf, u32 len, u32 ms)
 {
     struct ahci_port *ap = priv;
@@ -265,8 +265,9 @@ static int ahci_packet(void *priv, const u8 *cdb, void *buf, u32 len, u32 ms)
     u8 *f = ap->ct;
     u32 *hdr = (u32 *)ap->clb;
     u32 *prd = (u32 *)(ap->ct + 0x80);
-    u32 t0, is;
+    u32 t0, is, out = len & CDP_OUT;
     int ret = 0;
+    len &= ~CDP_OUT;
 
     borrow_begin(ap);
     if (RD32(p + PX_TFD) & 0x88) port_recover(ap);
@@ -278,7 +279,7 @@ static int ahci_packet(void *priv, const u8 *cdb, void *buf, u32 len, u32 ms)
     f[5] = 0xFE;                /* byte count limit (PIO only) */
     f[6] = 0xFF;
     memcpy(f + 0x40, cdb, 12);
-    hdr[0] = 5 | 0x20 | ((len ? 1UL : 0UL) << 16);     /* ATAPI */
+    hdr[0] = 5 | 0x20 | (out ? 0x40 : 0) | ((len ? 1UL : 0UL) << 16);     /* ATAPI, write */
     hdr[1] = 0;
     hdr[2] = vphys(ap->ct);
     hdr[3] = 0;

@@ -1,4 +1,6 @@
-# WINDISK 1.0 — IDE, AHCI, NVMe, CD/DVD, SD card and eMMC driver for DOS, Windows 3.x and Windows 95 / 98 / ME
+# WINDISK 1.1 — IDE, AHCI, NVMe, CD/DVD, SD card and eMMC driver for DOS, Windows 3.x and Windows 95 / 98 / ME
+
+The complete manual. **README.md** has the short overview and the installation.
 
 WINDISK is a driver written from scratch that brings modern disk controllers to MS-DOS 5 / 6,
 Windows 3.0 / 3.1 / Windows for Workgroups 3.11 (as a DOS driver also under Windows 1.0x and
@@ -35,7 +37,7 @@ together with the others:
 |---------|----------------|
 | **WINDISK**  | IDE, SATA AHCI and NVMe disks, IDE/AHCI CD/DVD drives, SD card readers and eMMC |
 | **WINUSB**   | USB host controllers and devices, PS/2 mouse and keyboard, touchpads, USB4 / Thunderbolt |
-| **WINAUDIO** | HD Audio, AC'97 and the Intel audio DSP (SST / SOF), General MIDI synthesizer |
+| **WINAUDIO** | HD Audio, AC'97 and the Intel audio DSP (SST / SOF), General MIDI synthesizer, Sound Blaster 16 emulation for DOS programs |
 | **WINUDF**   | the UDF file system (DVD, Blu-ray, packet-written CDs, UDF disks), read and write |
 
 ---
@@ -45,6 +47,7 @@ together with the others:
 | System | WINDISK |
 |--------|------|
 | MS-DOS 5.0 / 6.x | disks, CD/DVD (MSCDEX), SD / eMMC |
+| MS-DOS 7.0 / 7.1 / 8.0, FreeDOS | the same; FAT32 partitions on 7.1, 8.0 and FreeDOS (with Windows 95/98/ME installed the DOS driver is for its MS-DOS mode, `/DOS`) |
 | Windows 1.0x, Windows 2.x (real mode) | disks (as DOS drives) |
 | Windows/386 2.x | **does not work** (see "Known limitations") |
 | Windows 3.0 Real / Standard / 386 Enhanced Mode | disks, CD/DVD |
@@ -68,13 +71,17 @@ Files used by several systems are in each of their folders. The installer is run
 
 | Folder | Files |
 |--------|-------|
-| `bin/DOS` | `DSKBENCH.EXE`, `INSTDISK.EXE`, `README.TXT`, `UNINDISK.EXE`, `WINCD.SYS`, `WINDCORE.BIN`, `WINDISK.SYS`, `WININFO.EXE` |
+| `bin/DOS` | `DSKBENCH.EXE`, `INSTDISK.EXE`, `MANUAL.TXT`, `README.TXT`, `UNINDISK.EXE`, `WINCD.SYS`, `WINDCORE.BIN`, `WINDISK.SYS`, `WININFO.EXE` |
 | `bin/WIN3X` | `WIN30FIX.COM`, `WINDISK.386`, `WINDISK.TXT`, `WINGRP.EXE` |
 | `bin/WIN9X` | `WIN4G.VXD`, `WINDISK.INF`, `WINDISK.PDR`, `WINDISK.TXT`, `WINDISK.VXD`, `WINDISKC.INF`, `WINDISKD.INF`, `WINGRP.EXE` |
 
 ## 1. Requirements
 
-* Pentium or later processor (TSC), MS-DOS 5.0 / 6.x, **HIMEM.SYS**, PCI bus
+* Pentium or later processor with a time stamp counter (also SoCs that have one but do not
+  report it through CPUID, such as the Vortex86 DX / SX / EX), MS-DOS 5.0 / 6.x / 7.x / 8.0
+  or FreeDOS, **HIMEM.SYS** (or another XMS driver: JEMMEX, HIMEMX; with or without
+  EMM386 / JEMM386), PCI bus. The DOS driver can be loaded high (`DEVICEHIGH`) or with a
+  device loader such as DEVLOAD.
 * Windows 3.0, 3.1 or WfW 3.11 (optional; under Windows 1.0x and real-mode 2.x the disks
   work as DOS drives, under Windows/386 2.x they do not), or Windows 95 / 98 / ME
 * For CD/DVD drives: **MSCDEX.EXE** of MS-DOS (2.21 or 2.23)
@@ -93,11 +100,12 @@ Files used by several systems are in each of their folders. The installer is run
 | `DSKBENCH.EXE` | DOS | sequential read benchmark |
 | `INSTDISK.EXE` | DOS | installer |
 | `UNINDISK.EXE` | DOS | uninstaller |
-| `README.TXT`   | DOS | this text (code page 437) |
+| `README.TXT`   | DOS | the short README (code page 437) |
+| `MANUAL.TXT`   | DOS | this manual (code page 437) |
 | `WINDISK.386`  | WIN3X | Windows 386 Enhanced Mode VxD, in the directory of WINDISK.SYS (loaded automatically) |
 | `WIN30FIX.COM` | WIN3X | XMS fix for Windows 3.0 Standard Mode with more than 16 MB of memory |
 | `WINGRP.EXE`   | WIN3X, WIN9X | creates the Program Manager / Start menu group at the next start of Windows |
-| `WINDISK.TXT`  | WIN3X, WIN9X | this text for Notepad ("Read Me" item of the group) |
+| `WINDISK.TXT`  | WIN3X, WIN9X | this manual for Notepad ("Read Me" item of the group) |
 | `WINDISK.VXD`  | WIN9X | Windows 95/98/ME Plug and Play VxD (DevLoader of the controllers, enumerator of the disks) |
 | `WINDISK.PDR`  | WIN9X | Windows 95/98/ME I/O Supervisor port driver (`SYSTEM\IOSUBSYS`) |
 | `WINDISK.INF`  | WIN9X | IDE, AHCI, RAID (as AHCI), NVMe and SD controllers (Hard disk controllers) |
@@ -116,7 +124,7 @@ INSTDISK                     installs into the Windows directory (e.g. C:\WINDOW
 INSTDISK D:\DRV\WIN          installs into another directory
 INSTDISK /O /PIO /ISA        with driver options (everything after /O goes to WINDISK.SYS)
 INSTDISK /NO32               does not add the 32-bit disk access settings to SYSTEM.INI
-INSTDISK /DOS                MS-DOS 7 (Windows 95/98): adds WINDISK.SYS to CONFIG.SYS too
+INSTDISK /DOS                Windows 95/98 installed: adds WINDISK.SYS to CONFIG.SYS too
 ```
 
 INSTDISK finds every Windows installation of the machine (`/W:dir` selects one). It copies
@@ -232,7 +240,7 @@ On Windows 9x WINDISK is a **Plug and Play** driver; CONFIG.SYS needs no line.
    to `WINDOWS\SYSTEM`, `WINDISK.PDR` to `SYSTEM\IOSUBSYS`, the INF files to `WINDOWS\INF`
    (without their `CopyFiles` lines: the files are in place already, Windows would ask for
    a disk for each), and `device=win4g.vxd` and `device=windisk.vxd` are added to the
-   `[386Enh]` section of SYSTEM.INI. On MS-DOS 7 (the DOS of Windows 95/98) WINDISK.SYS is
+   `[386Enh]` section of SYSTEM.INI. On the MS-DOS 7 of Windows 95/98 WINDISK.SYS is
    **not** added to CONFIG.SYS; `WINDISK.VXD` drives Windows' disks from the start.
    (On Windows 9x INSTDISK does not touch the `*int13` / 32BitDiskAccess settings.)
 2. In **Device Manager** select the controller: on Windows 95 Remove + Refresh ("New
@@ -372,9 +380,20 @@ disk identity.
   UNIT (tray), PREVENT ALLOW (lock), READ TOC.
 * `WINCD.SYS` offers the DOS CD-ROM device driver interface MSCDEX expects (READ LONG cooked
   / raw, HSG / Red Book addressing; IOCTL input: header address, head location, device
-  status, sector size, volume size, media changed, disc / track info; IOCTL output: tray
-  open / close, lock, reset). Requests go to the WINDISK core through INT 2Fh; it works the
-  same in DOS, Standard Mode and 386 Enhanced Mode.
+  status, sector size, volume size, media changed, disc / track info, Q-channel (current
+  track, index and times), UPC / EAN, audio status (paused, start and end of the last play);
+  IOCTL output: tray open / close, lock, reset; PLAY AUDIO, STOP AUDIO (pause, a second
+  STOP ends the play) and RESUME AUDIO, so DOS CD players and the CD Player of Windows'
+  MS-DOS mode play audio CDs through the drive's analog or digital output). While a disc
+  plays the device status says "playing" and requests that would stop the play answer
+  "busy". Requests go to the WINDISK core through INT 2Fh; it works the same in DOS,
+  Standard Mode and 386 Enhanced Mode.
+* A drive that is busy for a moment (with audio, or spinning up) does not lose its disc: the
+  medium counts as gone only when the drive reports "medium not present" or does not answer
+  three times in a row (the CD Player showed track 00 and then the disc again each time Play
+  was pressed).
+* SCSI commands that send data to the drive (MODE SELECT: volume, speed) go through on IDE
+  and AHCI, in DOS and from the Windows 9x port driver.
 * A disc change is reported to MSCDEX as "media changed"; on DVDs sectors beyond 4 GB are
   read too (a single ISO 9660 file can be 4 GB at most).
 * WININFO and USBTREE show the CD/DVD drives and the size of the disc.
@@ -548,8 +567,9 @@ and Windows 3.1 Enhanced Mode), no double mount of the BIOS's INT 13h card; the 
 * **Windows/386 2.x** switches the processor to V86 mode without offering VCPI; while it runs
   the 32-bit core cannot be entered and the driver serves no requests. The real-mode
   Windows 2.x (`WIN86.COM` / `WIN.COM`) works.
-* **DOS file systems:** DOS 5 / 6 read only FAT12 / FAT16 (2 GB per partition at most);
-  FAT32, NTFS, exFAT ... partitions get no drive letter.
+* **DOS file systems:** MS-DOS 5 / 6 read only FAT12 / FAT16 (2 GB per partition at most);
+  MS-DOS 7.10 / 8.0 and FreeDOS read FAT32 too; NTFS, exFAT ... partitions get no drive
+  letter.
 * **SeaBIOS (QEMU only):** when SeaBIOS uses a USB keyboard or mouse at boot, its USB polling
   in SMM can stop the machine while Windows 2.x starts, and DOS boxes of Windows 95/98/ME
   close. Real BIOSes hand the controllers over properly (BIOS / OS semaphore, SMIs off).
@@ -563,9 +583,9 @@ and Windows 3.1 Enhanced Mode), no double mount of the BIOS's INT 13h card; the 
   with FastDisk (§4).
 * QEMU runs SeaBIOS; the UEFI-CSM behaviour (a BIOS that stops the port) could not be
   reproduced in tests.
-* **CD/DVD:** in DOS (MSCDEX) only ISO 9660 data discs (UDF discs: WINUDF); audio CD playback
-  (PLAY AUDIO) is not supported in DOS. On Windows 95/98/ME CDFS and the audio commands go to
-  the drive directly. USB CD/DVD drives are WINUSB's. Blu-ray was not tried.
+* **CD/DVD:** in DOS (MSCDEX) ISO 9660 data discs (UDF discs: WINUDF) and audio CDs (played by
+  the drive, no digital audio extraction). On Windows 95/98/ME CDFS and the audio commands go
+  to the drive directly. USB CD/DVD drives are WINUSB's. Blu-ray was not tried.
 * **SD / eMMC:** not tried on real card readers (tested with QEMU's `sdhci-pci`, `sd-card`
   and `emmc` devices; QEMU 9.2 for eMMC). Realtek's PCIe card readers (RTS5xxx, own register
   interface) and Realtek USB readers with a vendor protocol are not supported; standard USB
@@ -582,6 +602,25 @@ and Windows 3.1 Enhanced Mode), no double mount of the BIOS's INT 13h card; the 
   2 TB.
 
 ## Version history
+
+**1.1 (26 October 2026)**
+
+Changelog:
+
+- Added the audio functions of CD/DVD drives for MSCDEX (play, pause, resume, stop, Q-channel position, UPC, audio status; requests 132, 133, 136 and IOCTL 12, 14, 15) and SCSI commands with data to the drive (MODE SELECT) in DOS and Windows 95/98/ME: CD players (Windows' CD Player in MS-DOS mode, DOS CD players) play audio CDs, the disc no longer disappears when Play is pressed.
+- Fixed the BIOS drives of Windows 9x not being matched to their disks when a FAT16 drive gives its size in the 32-bit field of the BPB ("none of 1 disk(s) matches", the drive left on the BIOS path).
+- A CD/DVD drive that is busy for a moment (playing audio, spinning up) no longer loses its disc: the medium is gone only when the drive says "medium not present" or does not answer three times in a row (Windows' CD Player showed track 00 and the disc again each time Play was pressed).
+- WINDISK.SYS, WINUSB.SYS and WINAUDIO.SYS can be loaded high (`DEVICEHIGH`); BIOS disks are recognized from an upper memory block too.
+- Windows 95/98/ME: WINDISK.VXD loaded at the start takes only the controllers whose installed driver is WINDISK (the others belong to Windows' own drivers, which start them too).
+- Fixed "CPU without time stamp counter" on CPUs that have one but do not report it through CPUID (Vortex86 DX / SX / EX …): the TSC is tried directly.
+- The TSC rate is measured with a time limit and with the PIT counter when the timer interrupt does not come (freezes at the start under some memory managers).
+- WINDISK.SYS loaded with DEVLOAD or another device loader finds WINDCORE.BIN in its own directory.
+- The installer tells Windows 98, 98 Second Edition and ME apart by the version of USER.EXE (Windows 98 was shown as Windows 95).
+- Added MS-DOS 7.0, 7.1, 8.0 and FreeDOS support: drive letters on plain MS-DOS 7.x / 8.0 and FreeDOS, FAT32 partitions on MS-DOS 7.10 / 8.0 and FreeDOS, no doubled drives on FreeDOS.
+- The installer adds WINDISK.SYS to CONFIG.SYS on plain MS-DOS 7.x / 8.0 and FreeDOS too (only Windows 95/98/ME skip it) and installs the DOS driver alone when no Windows is found.
+- Fixed BIOS disks on controllers the driver takes over (NVMe with /NVME): their INT 13h calls are served by the driver.
+- Partitions Windows 9x reports as unformatted (UDF disks) are matched to their BIOS drives.
+- The documentation is split into README.md (overview, installation) and MANUAL.md (all details).
 
 **1.0 (5 October 2026)** — first release.
 

@@ -1,4 +1,4 @@
-; WINDISK.INF - WINDRV 1.0 WINDISK disk controllers for Windows 95, 98 and ME
+; WINDISK.INF - WINDRV 1.1 WINDISK disk controllers for Windows 95, 98 and ME
 ; PCI IDE, SATA AHCI (and Intel / AMD RAID mode as AHCI), NVMe and SD host controllers (PCI
 ; and ACPI). WINDISK.VXD drives the controller and enumerates its disks and CD/DVD drives;
 ; the I/O Supervisor loads WINDISK.PDR for them (WINDISKD.INF, WINDISKC.INF).
@@ -55,7 +55,7 @@ UpdateInis=WINDISK.Inis
 [WINDISK.HC.AddReg]
 HKR,,DevLoader,,WINDISK.VXD
 HKR,,Options,,""
-HKR,,DriverDesc,,"%Provider% WINDISK 1.0"
+HKR,,DriverDesc,,"%Provider% WINDISK 1.1"
 
 ; WIN4G.VXD moves PCI resources above 4G below 4G before the PCI bus is enumerated;
 ; WINDISK.VXD loaded at the start takes the controllers of the BIOS drives before the I/O
@@ -77,7 +77,7 @@ WINDISKC.INF
 
 [Strings]
 Provider="WINDRV"
-DiskName="WINDRV WINDISK 1.0 disk"
+DiskName="WINDRV WINDISK 1.1 disk"
 IDE.Desc="WINDISK PCI IDE Controller (primary/secondary channels)"
 AHCI.Desc="WINDISK SATA AHCI Controller"
 RAID.Desc="WINDISK SATA Controller (RAID mode, as AHCI)"

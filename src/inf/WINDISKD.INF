@@ -1,4 +1,4 @@
-; WINDISKD.INF - WINDRV 1.0 WINDISK disks for Windows 95, 98 and ME
+; WINDISKD.INF - WINDRV 1.1 WINDISK disks for Windows 95, 98 and ME
 ; IDE, SATA, NVMe and SD disks enumerated by WINDISK.VXD: the I/O Supervisor loads the
 ; WINDISK.PDR port driver for them, which gives them 32-bit drive letters. Device Manager
 ; shows the model name the disk reports.

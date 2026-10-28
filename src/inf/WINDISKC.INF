@@ -1,4 +1,4 @@
-; WINDISKC.INF - WINDRV 1.0 WINDISK CD/DVD drives for Windows 95, 98 and ME
+; WINDISKC.INF - WINDRV 1.1 WINDISK CD/DVD drives for Windows 95, 98 and ME
 ; ATAPI CD/DVD drives on IDE and SATA (AHCI) controllers enumerated by WINDISK.VXD: the I/O
 ; Supervisor loads the WINDISK.PDR port driver for them.
 

@@ -270,14 +270,15 @@ static int ide_ready(struct blkdev *bd)
 
 static struct blkops ide_ops = { ide_rw, ide_flush, ide_ready };
 
-/* ATAPI PACKET command, PIO data in; 0 ok, 1 check condition, -1 error */
+/* ATAPI PACKET command, PIO data in (out with CDP_OUT); 0 ok, 1 check condition, -1 error */
 static int atapi_packet(void *priv, const u8 *cdb, void *buf, u32 len, u32 ms)
 {
     struct ide_dev *d = priv;
     struct ide_chan *c = d->ch;
     u8 *p = buf;
-    u32 got = 0;
+    u32 got = 0, out = len & CDP_OUT;
     int s;
+    len &= ~CDP_OUT;
     chan_irq_off(c);
     if (wait_bsy(c, 5000) < 0) {
         if (!c->owned) return -1;           /* the BIOS disk on the channel would be reset too */
@@ -314,6 +315,12 @@ static int atapi_packet(void *priv, const u8 *cdb, void *buf, u32 len, u32 ms)
         bc = inb(c->cmd + R_LBA1) | ((u32)inb(c->cmd + R_LBA2) << 8);
         words = (bc + 1) / 2;
         take = got < len ? MIN(words, (len - got) / 2) : 0;
+        if (out) {
+            if (take) ide_outsw(c->cmd + R_DATA, p + got, take);
+            got += take * 2;
+            for (; take < words; take++) outw(c->cmd + R_DATA, 0);
+            continue;
+        }
         if (take) ide_insw(c->cmd + R_DATA, p + got, take);
         got += take * 2;
         for (; take < words; take++) (void)inw(c->cmd + R_DATA);
@@ -544,6 +551,7 @@ void ide_probe_legacy(int all)
 static int dos_uses(int drv)
 {
     int i;
+    if (cb->nmounted == 0xFF) return 1;     /* FreeDOS: list unknown, every BIOS disk counts */
     for (i = 0; i < cb->nmounted && i < 16; i++)
         if (cb->mounted[i].biosdrv == drv) return 1;
     return 0;
