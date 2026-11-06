@@ -1,4 +1,4 @@
-# WINDISK 1.1 — IDE, AHCI, NVMe, CD/DVD, SD card and eMMC driver for DOS, Windows 3.x and Windows 95 / 98 / ME
+# WINDISK 1.2 — IDE, AHCI, NVMe, CD/DVD, SD card and eMMC driver for DOS, Windows 1.x / 2.x / 3.x / 95 / 98 / ME
 
 The complete manual. **README.md** has the short overview and the installation.
 
@@ -146,12 +146,17 @@ For CD/DVD drives INSTDISK also
 Windows 3.0 and 3.1 get a **WINDISK** group in Program Manager (Disk Info, Disk Benchmark,
 Read Me), Windows 95 / 98 / ME the same group in the Start menu: Windows 3.0's group file is
 written directly, otherwise WINGRP.EXE creates the group through DDE at the next start of
-Windows. Installing again does not duplicate lines or group items.
+Windows. Installing again does not duplicate lines or group items. Windows 3.x also get an
+**Uninstall WINDISK** item (the disk icon with a red cross): the uninstaller is a DOS
+program, so Windows closes, runs `UNINDISK.EXE /REBOOT` and the computer restarts when it
+is done. Windows 95/98/ME get the programs as **shortcuts on the desktop** too
+(`WINDOWS\DESKTOP`); the uninstaller removes them with the programs.
 
 Uninstall: `C:\WINDOWS\UNINDISK` removes the CONFIG.SYS lines, restores SYSTEM.INI, removes
-the group, the files and (unless it is the Windows directory) the emptied directory (`/K`
-keeps the files). WININFO / DSKBENCH stay when WINUSB is installed in the same directory.
-The driver stays in memory until the next restart.
+the group, the desktop shortcuts, the files and (unless it is the Windows directory) the
+emptied directory (`/K` keeps the files). WININFO / DSKBENCH stay when WINUSB is installed in
+the same directory. The driver stays in memory until the next restart; `/REBOOT` waits for a
+key and restarts the computer at the end (the Uninstall item of Windows 3.x).
 
 Manual installation:
 
@@ -188,6 +193,7 @@ starts. EMM386 works too (VCPI); WINDISK.SYS after EMM386 is the tested order.
 | `/S`      | the driver log goes to the screen too (diagnosis on machines without a serial port) |
 | `/NORELOC`| do not move PCI resources from above 4 GB at boot |
 | `/ALL4G`  | move every device below 4 GB at boot, not only the WINDRV devices |
+| `/Q`      | quiet: only error messages on the screen at boot (no drive messages) |
 
 ### When there is no drive letter
 
@@ -282,6 +288,20 @@ miniports are not used.
   * When WINDISK is installed while Windows runs (Device Manager), a boot disk that is open
     in compatibility mode moves to the 32-bit path **at the next boot**; a disk in use is
     not taken away from the running Windows.
+  * **One driver per controller:** a devnode of another I/O Supervisor port driver whose
+    ports or registers belong to a controller WINDISK drives is not started (Device Manager
+    shows it with a problem): the "Primary / Secondary IDE controller" devnodes of
+    ESDI_506.PDR that the detection of Windows created for a PCI IDE controller in
+    compatibility mode, or an AHCI / NVMe SCSI miniport installed earlier (AHCINT9X). Two
+    drivers on one IDE channel take each other's interrupts and status: requests never end
+    (Explorer and File Manager hang when they ask every drive at once, above all with
+    CD/DVD drives on the channel) and every drive shows twice. WINDISK.INF also removes the
+    `PortDriver` / miniport values another driver left in the controller's software key.
+  * Disks larger than 128 GB (LBA48) and 2 TB are served with 48-bit / 64-bit sector
+    numbers by WINDISK.PDR and by the INT 13h transfers of the VxD (the extended functions
+    42h / 43h with their 64-bit block numbers), also for the boot disk and the swap file;
+    the limits of Windows 95/98/ME themselves (FAT32 volumes up to 2 TB, MBR partitions
+    below 2 TB with 512-byte sectors) still apply.
 * **CD/DVD drives:** every CD/DVD drive gets a SCSI bus DCB from WINDISK.PDR; the
   I/O Supervisor's SCSI'izer turns CDFS requests into SRBs and the driver executes the
   commands. CDs are read by the 32-bit CDFS (no MSCDEX), disc change, Eject and the audio
@@ -602,6 +622,24 @@ and Windows 3.1 Enhanced Mode), no double mount of the BIOS's INT 13h card; the 
   2 TB.
 
 ## Version history
+
+**1.2 (2 November 2026)**
+
+Changelog:
+
+- Program Manager (Windows 3.x): an **Uninstall WINDISK** item with a red cross on the disk icon (Windows closes, `UNINDISK /REBOOT` runs and restarts the computer); Windows 95/98/ME: the programs as desktop shortcuts too, removed by the uninstaller. The banner lists the systems (DOS, Windows 1.x/2.x/3.x/95/98/ME).
+- Windows 95/98/ME: other port drivers no longer start for a controller WINDISK drives. Devnodes left by the detection of Windows ("Primary / Secondary IDE controller", ESDI_506.PDR) or by an earlier driver (an AHCI or NVMe SCSI miniport such as AHCINT9X) whose ports or registers belong to a WINDISK controller fail their start (Device Manager shows them with a problem): no drive twice in Device Manager, and no freezes when Explorer or File Manager ask every drive at once with CD/DVD drives on the channel (two drivers on one IDE channel took each other's interrupts and status).
+- WINDISK.INF removes the `PortDriver` / miniport values another driver left in the controller's software key (AHCINT9X.MPD was listed with WINDISK's files).
+- CD/DVD drives without a disc: the answer is kept for half a second, Windows asks every drive at once when a folder opens.
+- `/Q` hides the drive messages of the DOS driver at boot (only errors are shown).
+- The installer lists the Windows installations it finds, numbered, and asks which of them to set up (`1`, `1,3`, `A` for all, `0` for none: the DOS driver only); `/ALL` sets up all of them without asking, `/W:dir` only that one.
+- The DOS driver takes its extended memory above 16 MB when there is room there: Windows 3.x Standard Mode (and other 286 DOS extenders) can use only the memory below 16 MB ("Insufficient extended memory" with all WINDRV drivers loaded).
+- `/Q`: only error messages on the screen while the DOS driver loads.
+- Fixed "CPU without CPUID / time stamp counter" on Vortex86 DX / MX / EX processors, whose CPUID instruction works although the ID flag of EFLAGS cannot be changed: the time stamp counter is tried directly.
+- WININFO finds the driver also when it was loaded with DEVLOAD and a program (the command shell) later put back an INT 2Fh vector it had saved before: the driver hooks INT 2Fh again within a few seconds, and WININFO waits for that when the driver's device header is there.
+- Fixed a crash at boot ("CORE EXCEPTION 0000000E") with `DEVICEHIGH=` under JEMM386 / JEMMEX: the driver used the memory after its image as a buffer while it started, and a small upper memory block ends right there; the buffer now fits in the block DOS gave.
+- The texts of the DOS drivers, the VxDs and the documentation name everything the drivers support now.
+
 
 **1.1 (26 October 2026)**
 

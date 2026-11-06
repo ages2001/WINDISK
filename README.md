@@ -1,4 +1,4 @@
-# WINDISK 1.1 — disk driver for DOS, Windows 3.x and Windows 95 / 98 / ME
+# WINDISK 1.2 — disk driver for DOS, Windows 1.x / 2.x / 3.x / 95 / 98 / ME
 
 WINDISK drives modern disk controllers on old systems: **IDE** (also SATA in IDE mode),
 **SATA AHCI** (and RAID controllers working as AHCI), **NVMe**, IDE / AHCI **CD/DVD** drives,
@@ -102,6 +102,24 @@ else: all options, how the driver works, hardware and chipset notes, the program
 interface, building from source, tests and known limitations.
 
 ## Version history
+
+**1.2 (2 November 2026)**
+
+Changelog:
+
+- Program Manager (Windows 3.x): an **Uninstall WINDISK** item with a red cross on the disk icon (Windows closes, `UNINDISK /REBOOT` runs and restarts the computer); Windows 95/98/ME: the programs as desktop shortcuts too, removed by the uninstaller. The banner lists the systems (DOS, Windows 1.x/2.x/3.x/95/98/ME).
+- Windows 95/98/ME: other port drivers no longer start for a controller WINDISK drives. Devnodes left by the detection of Windows ("Primary / Secondary IDE controller", ESDI_506.PDR) or by an earlier driver (an AHCI or NVMe SCSI miniport such as AHCINT9X) whose ports or registers belong to a WINDISK controller fail their start (Device Manager shows them with a problem): no drive twice in Device Manager, and no freezes when Explorer or File Manager ask every drive at once with CD/DVD drives on the channel (two drivers on one IDE channel took each other's interrupts and status).
+- WINDISK.INF removes the `PortDriver` / miniport values another driver left in the controller's software key (AHCINT9X.MPD was listed with WINDISK's files).
+- CD/DVD drives without a disc: the answer is kept for half a second, Windows asks every drive at once when a folder opens.
+- `/Q` hides the drive messages of the DOS driver at boot (only errors are shown).
+- The installer lists the Windows installations it finds, numbered, and asks which of them to set up (`1`, `1,3`, `A` for all, `0` for none: the DOS driver only); `/ALL` sets up all of them without asking, `/W:dir` only that one.
+- The DOS driver takes its extended memory above 16 MB when there is room there: Windows 3.x Standard Mode (and other 286 DOS extenders) can use only the memory below 16 MB ("Insufficient extended memory" with all WINDRV drivers loaded).
+- `/Q`: only error messages on the screen while the DOS driver loads.
+- Fixed "CPU without CPUID / time stamp counter" on Vortex86 DX / MX / EX processors, whose CPUID instruction works although the ID flag of EFLAGS cannot be changed: the time stamp counter is tried directly.
+- WININFO finds the driver also when it was loaded with DEVLOAD and a program (the command shell) later put back an INT 2Fh vector it had saved before: the driver hooks INT 2Fh again within a few seconds, and WININFO waits for that when the driver's device header is there.
+- Fixed a crash at boot ("CORE EXCEPTION 0000000E") with `DEVICEHIGH=` under JEMM386 / JEMMEX: the driver used the memory after its image as a buffer while it started, and a small upper memory block ends right there; the buffer now fits in the block DOS gave.
+- The texts of the DOS drivers, the VxDs and the documentation name everything the drivers support now.
+
 
 **1.1 (26 October 2026)**
 
